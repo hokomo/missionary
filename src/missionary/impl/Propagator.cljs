@@ -206,6 +206,13 @@
           ((.-rcb sub) (.-state ps))
           (recur (inc i)))))))
 
+(defn detach-ready [^Subscription sub]
+  (let [^Process ps (.-target sub)
+        cb (if ^boolean (.-failed ps) (.-rcb sub) (.-lcb sub))]
+    (set! (.-ready ps) (detach sub))
+    (release (.-parent ps))
+    (cb)))
+
 (defn stream-ack [^Subscription sub]
   (let [^Process ps (.-target sub)]
     (when (nil? (set! (.-pending ps) (detach sub)))
@@ -473,15 +480,12 @@
             (step sub idle)
             (request sub idle)))))
     (unsubscribe [_ ^Subscription sub idle]
-      (let [^Process ps (.-target sub)
-            ^Publisher pub (.-parent ps)]
-        (if ^boolean (.-ready sub)
-          (do (set! (.-ready ps) (detach sub))
-              (release pub)
-              ((.-lcb sub)))
-          (do (stream-ack sub)
-              (release pub)))
-        (leave context idle)))
+      (if ^boolean (.-ready sub)
+        (detach-ready sub)
+        (let [^Process ps (.-target sub)]
+          (stream-ack sub)
+          (release (.-parent ps))))
+      (leave context idle))
     (accept [_ ^Subscription sub idle]
       (let [^Process ps (.-target sub)
             result (.-state ps)]
@@ -540,15 +544,12 @@
         (set! (.-state sub) (.-state ps))
         (step sub idle)))
     (unsubscribe [_ ^Subscription sub idle]
-      (let [^Process ps (.-target sub)
-            ^Publisher pub (.-parent ps)]
-        (if ^boolean (.-ready sub)
-          (do (set! (.-ready ps) (detach sub))
-              (release pub)
-              ((.-lcb sub)))
-          (do (set! (.-pending ps) (detach sub))
-              (release pub)))
-        (leave context idle)))
+      (if ^boolean (.-ready sub)
+        (detach-ready sub)
+        (let [^Process ps (.-target sub)]
+          (set! (.-pending ps) (detach sub))
+          (release (.-parent ps))))
+      (leave context idle))
     (accept [_ ^Subscription sub idle]
       (let [^Process ps (.-target sub)
             result (.-state sub)]

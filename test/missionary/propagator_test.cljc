@@ -366,3 +366,20 @@
       (l/transfer :sub1
         (l/terminated :sub1))
       (l/check #{:foo}))))
+
+(t/deftest signal-unsub-after-crash
+  (let [s (m/signal l/effect)]
+    (l/run
+      s (l/perform :sub1
+          (l/performed :eff
+            (l/notify :eff))
+          (l/notified :sub1))
+      s (l/perform :sub2
+          (l/notified :sub2))
+      (l/crash :sub1
+        (l/crashed :eff
+          error)
+        (l/cancelled :eff))
+      (l/check #{error})
+      (l/cancel :sub1
+        (l/terminated :sub1)))))
